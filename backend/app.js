@@ -5,7 +5,7 @@ const cors = require('cors');
 const session = require('express-session');
 const passport = require('passport');
 const { connectToDB, getDb } = require('./server'); // Import connection function
-
+let userdata
 const app = express();
 app.use(express.json());
 app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
@@ -20,7 +20,7 @@ app.use(session({
   }))
 app.use(passport.initialize());
 app.use(passport.session());
-
+let user1
 passport.use(new (require('passport-google-oauth2').Strategy)({
   clientID: '1049132989315-gj75cj4svnr3nc9retfa945iph2vmf0p.apps.googleusercontent.com',
   clientSecret: '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',
@@ -29,23 +29,24 @@ passport.use(new (require('passport-google-oauth2').Strategy)({
 }, async (accessToken, refreshToken, profile, done) => {
   try {
     const db = getDb();
-    let user = await db.collection('student').findOne({ googleId: profile.id });
-    console.log(user)
-    if (!user) {
-      user = await db.collection('student').insertOne({
+     user1 = await db.collection('student').findOne({ googleId: profile.id });
+    // console.log(profile)
+    if (!user1) {
+      user1 = await db.collection('student').insertOne({
         googleId: profile.id,
         email: profile.email,
         name: profile.displayName,
+        picture:profile.picture
       });
     }
-    return done(null, user);
+    return done(null, user1);
   } catch (error) {
     return done(error, null);
   }
 }));
 
 passport.serializeUser((user, done) => {
-    done(null, user._id.toString()); // Serialize the user ID as a string
+    done(null, user?._id.toString()); // Serialize the user ID as a string
   });
   
 
@@ -72,6 +73,10 @@ app.get('/auth/google', (req, res, next) => {
 app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: 'http://localhost:3000/login' }),
   (req, res) => {
+  //  console.log(req.user,"user")
+  userdata=req.user
+  
+    req.session.user = req.user;
     res.redirect('http://localhost:3000/home');
   }
 );
@@ -90,7 +95,18 @@ app.get('/logout', (req, res) => {
     res.redirect('/');
   });
 });
+async function getuser(req,res){
+  console.log(userdata.email,"data")
+  let db=getDb()
+  const data=await db.collection("student").find({email:userdata.email}).toArray()
+  res.json({
+    status:"success",
+    data
+  })
 
+
+}
+app.get("/getuser",getuser)
 app.listen(4000, async () => {
   console.log('Server running on port 4000');
   await connectToDB()
